@@ -33,7 +33,7 @@ class DocumentService {
       throw createServiceError('STORAGE_ERROR', 500, 'Não foi possível salvar o documento.');
     }
 
-    return this.toPublicDocument(document);
+    return document;
   }
 
   list() {
@@ -42,8 +42,7 @@ class DocumentService {
       .sort((left, right) => {
         const dateDifference = Date.parse(right.uploadedAt) - Date.parse(left.uploadedAt);
         return dateDifference || left.id.localeCompare(right.id);
-      })
-      .map((document) => this.toPublicDocument(document));
+      });
   }
 
   async getDownload(id) {
@@ -62,11 +61,6 @@ class DocumentService {
     } catch (_error) {
       throw createServiceError('STORAGE_ERROR', 500, 'Não foi possível ler o documento.');
     }
-  }
-
-  toPublicDocument(document) {
-    const { id, originalName, size, uploadedAt, owner } = document;
-    return { id, originalName, size, uploadedAt, owner };
   }
 }
 
