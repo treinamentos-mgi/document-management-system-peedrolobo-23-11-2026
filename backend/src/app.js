@@ -1,32 +1,70 @@
-// Seed do servidor backend do Document Management System.
-//
-// Este arquivo é apenas um ponto de partida mínimo. Ao longo do workshop você
-// vai usar o Agent Mode do GitHub Copilot para construir as camadas:
-//   - routes/       (definição das rotas)
-//   - controllers/  (entrada HTTP e validação)
-//   - services/     (regras de negócio)
-//   - repositories/ (persistência: arquivos locais + metadados em memória)
-//
-// Restrição do projeto: uploads são gravados no filesystem local da aplicação
-// usando multer com diskStorage. Não utilize provedores externos.
-
 const express = require('express');
+const multer = require('multer');
+const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const DocumentRepository = require('./repositories/documentRepository');
+const DocumentService = require('./services/documentService');
+const createDocumentController = require('./controllers/documentController');
+const createErrorHandler = require('./controllers/errorHandler');
+const createDocumentRouter = require('./routes/documentRoutes');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+function readConfiguration(options = {}) {
+  const ownerId = (options.ownerId ?? process.env.DMS_OWNER_ID ?? '').trim();
+  const configuredLimit = options.maxFileSizeBytes ??
+    process.env.DMS_MAX_FILE_SIZE_BYTES ??
+    10 * 1024 * 1024;
+  const maxFileSizeBytes = Number(configuredLimit);
 
-app.use(express.json());
+  if (!ownerId) {
+    throw new Error('A variável de ambiente DMS_OWNER_ID é obrigatória.');
+  }
 
-// Endpoint de verificação de saúde. As demais rotas (/upload, /documents,
-// /documents/:id/download) serão implementadas durante o Passo 2.
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+  if (!Number.isSafeInteger(maxFileSizeBytes) || maxFileSizeBytes <= 0) {
+    throw new Error('DMS_MAX_FILE_SIZE_BYTES deve ser um inteiro positivo.');
+  }
+
+  return {
+    ownerId,
+    maxFileSizeBytes,
+    storageDirectory: options.storageDirectory ?? path.resolve(__dirname, '../storage'),
+  };
+}
+
+function createApp(options = {}) {
+  const config = readConfiguration(options);
+  const repository = new DocumentRepository(config.storageDirectory);
+  const service = new DocumentService(repository, config.ownerId);
+  const controller = createDocumentController(service);
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: config.storageDirectory,
+      filename: (_request, _file, callback) => callback(null, randomUUID()),
+    }),
+    limits: {
+      fileSize: config.maxFileSizeBytes,
+      files: 1,
+    },
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.get('/health', (_request, response) => {
+    response.json({ status: 'ok' });
+  });
+  app.use(createDocumentRouter(controller, upload));
+  app.use(createErrorHandler());
+
+  return app;
+}
+
+const app = createApp();
 
 if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`DMS backend ouvindo na porta ${PORT}`);
   });
 }
 
 module.exports = app;
+module.exports.createApp = createApp;
