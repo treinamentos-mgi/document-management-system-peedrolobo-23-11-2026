@@ -81,6 +81,20 @@ test('upload rejeita arquivo ausente e arquivos acima do limite', async (t) => {
   assert.equal((await oversizedResponse.json()).error.code, 'FILE_TOO_LARGE');
 });
 
+test('upload rejeita mais de um arquivo na mesma requisição', async (t) => {
+  const baseUrl = await createTestServer(t);
+  const form = createUploadForm('primeiro.txt', 'primeiro');
+  form.append('file', new Blob(['segundo'], { type: 'text/plain' }), 'segundo.txt');
+
+  const response = await fetch(`${baseUrl}/upload`, {
+    method: 'POST',
+    body: form,
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, 'MULTIPART_INVALID');
+});
+
 test('download de um identificador sem registro retorna 404 uniforme', async (t) => {
   const baseUrl = await createTestServer(t);
   const response = await fetch(`${baseUrl}/documents/nao-existe/download`);
