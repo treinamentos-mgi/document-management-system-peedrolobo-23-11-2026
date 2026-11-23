@@ -1,3 +1,8 @@
+function toPublicDocument(document) {
+  const { id, originalName, size, uploadedAt, owner } = document;
+  return { id, originalName, size, uploadedAt, owner };
+}
+
 function createDocumentController(service) {
   return {
     upload: async (request, response, next) => {
@@ -8,7 +13,7 @@ function createDocumentController(service) {
           size: request.file.size,
         };
         const document = await service.upload(uploadedFile);
-        response.status(201).json({ document });
+        response.status(201).json({ document: toPublicDocument(document) });
       } catch (error) {
         next(error);
       }
@@ -16,7 +21,7 @@ function createDocumentController(service) {
 
     list: (_request, response, next) => {
       try {
-        response.json({ documents: service.list() });
+        response.json({ documents: service.list().map(toPublicDocument) });
       } catch (error) {
         next(error);
       }
